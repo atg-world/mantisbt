@@ -38,7 +38,12 @@
  * @uses relationship_api.php
  * @uses string_api.php
  * @uses user_api.php
+ *
+ * @noinspection HtmlFormInputWithoutLabel, PhpUnused
  */
+
+use Mantis\Exceptions\ClientException;
+use Mantis\Exceptions\StateException;
 
 require_api( 'access_api.php' );
 require_api( 'authentication_api.php' );
@@ -78,14 +83,21 @@ require_api( 'user_api.php' );
 
 /**
  * Returns HTML for each filter field, to be used in filter form.
- * $p_filter_target is a field name to match any of "the print_filter_..." functions,
- * excluding those related to custom fields and plugin fields.
- * When $p_show_options is enabled, the form inputs are returned to allow selection,
- * if the option is disabled, returns the current value and a hidden input for that value.
- * @param array $p_filter Filter array
- * @param string $p_filter_target Filter field name
- * @param boolean $p_show_inputs True to return a visible form input or false for a text value.
+ *
+ * $p_filter_target is a field name to match any of "the print_filter_..."
+ * functions, excluding those related to custom fields and plugin fields. When
+ * $p_show_options is enabled, the form inputs are returned to allow selection,
+ * if the option is disabled, returns the current value and a hidden input for
+ * that value.
+ *
+ * @param array   $p_filter        Filter array
+ * @param string  $p_filter_target Filter field name
+ * @param boolean $p_show_inputs   True to return a visible form input or false
+ *                                 for a text value.
+ *
  * @return string The html content for the field requested
+ *
+ * @throws StateException if there is no matching print_filter_... function
  */
 function filter_form_get_input( array $p_filter, $p_filter_target, $p_show_inputs = true ) {
 	if( $p_show_inputs ) {
@@ -112,9 +124,11 @@ function filter_form_get_input( array $p_filter, $p_filter_target, $p_show_input
 		return ob_get_clean();
 	} else {
 		# error - no function to populate the target (e.g., print_filter_foo)
-		error_parameters( $p_filter_target );
-		trigger_error( ERROR_FILTER_NOT_FOUND, ERROR );
-		return false;
+		throw new StateException(
+			"No function to populate the target",
+			ERROR_FILTER_NOT_FOUND,
+			array( $p_filter_target )
+		);
 	}
 }
 
@@ -1036,6 +1050,7 @@ function print_filter_show_priority( array $p_filter = null ) {
  * Print the current value of this filter field, as visible string, and as a hidden form input.
  * @param array $p_filter	Filter array
  * @return void
+ * @throws ClientException
  */
 function print_filter_values_show_profile( array $p_filter ) {
 	$t_filter = $p_filter;
@@ -1051,8 +1066,7 @@ function print_filter_values_show_profile( array $p_filter ) {
 			if( filter_field_is_any( $t_current ) ) {
 				$t_any_found = true;
 			} else {
-				$t_profile = profile_get_row_direct( $t_current );
-				$t_this_string = $t_profile['platform'] . ' ' . $t_profile['os'] . ' ' . $t_profile['os_build'];
+				$t_this_string = profile_get_name( $t_current );
 			}
 			if( $t_first_flag != true ) {
 				$t_output = $t_output . '<br />';
@@ -1855,7 +1869,7 @@ function print_filter_values_custom_field( array $p_filter, $p_field_id ) {
 			if( filter_field_is_none( $t_val ) ) {
 				$t_strings[] = lang_get( 'none' );
 			} else {
-				$t_strings[] = $t_val;
+				$t_strings[] = string_attribute( $t_val );
 			}
 			$t_inputs[] = '<input type="hidden" name="custom_field_' . $p_field_id . '[]" value="' . string_attribute( $t_val ) . '" />';
 		}
@@ -2350,9 +2364,10 @@ function print_multivalue_field( $p_field_name, $p_field_value ) {
 
 
 /**
- * Draw the table cells to view and edit a filter. This will usually be part of a form.
- * This method only prints the cells, not the table definition, or any other form element
- * outside of that.
+ * Draw the table cells to view and edit a filter.
+ *
+ * This will usually be part of a form. This method only prints the cells, not
+ * the table definition, or any other form element outside of that.
  * A filter array is provided, to populate the fields.
  * The form will use javascript to show dynamic completion of fields (unless the
  * parameter $p_static is provided).
@@ -2362,12 +2377,16 @@ function print_multivalue_field( $p_field_name, $p_field_value ) {
  *
  * @param array   $p_filter               Filter array to show.
  * @param boolean $p_for_screen           Type of output
- * @param boolean $p_static               Whether to print a static form (no dynamic fields)
- * @param string  $p_static_fallback_page Page name to use as javascript fallback
- * @param boolean $p_show_search          Whether to render the search field inside
- *                                        the general fields area. If false, the text
- *                                        search should be managed externally.
+ * @param boolean $p_static               Whether to print a static form (no
+ *                                        dynamic fields)
+ * @param string  $p_static_fallback_page Page name to use as javascript
+ *                                        fallback
+ * @param boolean $p_show_search          Whether to render the search field
+ *                                        inside the general fields area. If
+ *                                        false, the text search should be
+ *                                        managed externally.
  * @return void
+ * @throws StateException
  */
 function filter_form_draw_inputs( $p_filter, $p_for_screen = true, $p_static = false, $p_static_fallback_page = null, $p_show_search = true ) {
 
